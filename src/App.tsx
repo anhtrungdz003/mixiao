@@ -6,6 +6,9 @@ import About from "./assets/pages/about";
 import News from "./assets/pages/news";
 import Contact from "./assets/pages/contact";
 import MyOrders from "./assets/mini-cpn/MyOrders";
+import OrderHistory from "./assets/mini-cpn/OrderHistory";
+import Checkout from "./assets/mini-cpn/Checkout";
+import Success from "./assets/mini-cpn/Success";
 import PrivacyPolicy from "@/assets/mini-cpn/PrivacyPolicy";
 import TermsOfService from "@/assets/mini-cpn/TermsOfService";
 import ShippingPolicy from "@/assets/mini-cpn/ShippingPolicy";
@@ -39,6 +42,9 @@ function App() {
               <Route path="/news" element={<News />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/orders" element={<MyOrders />} />
+              <Route path="/my-orders" element={<OrderHistory />} />
+              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/success" element={<Success />} />
 
               {/* Chính sách & thông tin */}
               <Route path="/chinh-sach-bao-mat" element={<PrivacyPolicy />} />

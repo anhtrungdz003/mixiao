@@ -1,121 +1,236 @@
-// Trang báo cáo thống kê doanh thu, sản phẩm bán chạy, v.v.
-
-import React, { useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
+import axios from "axios";
+import { Bar } from "react-chartjs-2";
 import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/card";
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { format } from "date-fns";
 
-interface ReportData {
-  month: string;
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+type FilterType = "day" | "week" | "month" | "year" | "range";
+
+interface ChartData {
+  category: string;
+  quantity: number;
   revenue: number;
-  totalOrders: number;
-  bestSelling: string;
+}
+
+interface ReportItem {
+  product_id: number;
+  name: string;
+  quantity: number;
+  revenue: number;
+  category: string;
 }
 
 const ReportManager: React.FC = () => {
-  const [reports] = useState<ReportData[]>([
-    {
-      month: "Tháng 8/2025",
-      revenue: 120_000_000,
-      totalOrders: 320,
-      bestSelling: "Trà sữa Mixiao",
-    },
-    {
-      month: "Tháng 9/2025",
-      revenue: 150_000_000,
-      totalOrders: 400,
-      bestSelling: "Bánh mochi",
-    },
-    {
-      month: "Tháng 10/2025",
-      revenue: 95_000_000,
-      totalOrders: 280,
-      bestSelling: "Trà sữa Mixiao",
-    },
-  ]);
+  const [filter, setFilter] = useState<FilterType>("day");
+  const [startDate, setStartDate] = useState<Date | null>(new Date());
+  const [endDate, setEndDate] = useState<Date | null>(new Date());
+  const [totalRevenue, setTotalRevenue] = useState<number>(0);
+  const [totalOrders, setTotalOrders] = useState<number>(0);
+  const [bestSeller, setBestSeller] = useState<string>("");
+  const [chartData, setChartData] = useState<ChartData[]>([]);
+  const [reportData, setReportData] = useState<ReportItem[]>([]);
 
-  // --- Hàm format số thành VNĐ ---
-  const formatCurrency = (value: number) =>
-    value.toLocaleString("vi-VN", { style: "currency", currency: "VND" });
+  const fetchReport = useCallback(async () => {
+    if (!startDate || (filter === "range" && !endDate)) return;
+
+    try {
+      const params: any = { filter };
+      if (startDate) params.startDate = format(startDate, "yyyy-MM-dd");
+      if (filter === "range" && endDate)
+        params.endDate = format(endDate, "yyyy-MM-dd");
+
+      const res = await axios.get("http://localhost:3000/api/reports", {
+        params,
+        headers: {
+          Authorization: "Bearer " + localStorage.getItem("token"),
+        },
+      });
+
+      setTotalRevenue(res.data.totalRevenue);
+      setTotalOrders(res.data.totalOrders);
+      setBestSeller(res.data.bestSeller);
+      setChartData(res.data.chartData);
+      setReportData(res.data.reportData);
+    } catch (err) {
+      console.error("Error fetching report:", err);
+      alert("Lấy báo cáo thất bại!");
+    }
+  }, [filter, startDate, endDate]);
+
+  useEffect(() => {
+    fetchReport();
+  }, [fetchReport]);
+
+  const chart = {
+    labels: chartData.map((c) => c.category),
+    datasets: [
+      {
+        label: "Số lượng",
+        data: chartData.map((c) => c.quantity),
+        backgroundColor: "rgba(255, 182, 193, 0.7)", // pastel pink
+      },
+      {
+        label: "Doanh thu",
+        data: chartData.map((c) => c.revenue),
+        backgroundColor: "rgba(255, 105, 180, 0.6)", // hot pink
+      },
+    ],
+  };
 
   return (
-    <div className="p-6 bg-white rounded-2xl shadow-md border border-pink-100">
-      <h2 className="text-2xl font-semibold text-pink-500 mb-4">
-        Báo cáo bán hàng
+    <div className="p-8 bg-gradient-to-br from-pink-50 to-pink-100 rounded-2xl shadow-xl max-w-7xl mx-auto space-y-8 border border-pink-200">
+      <h2 className="text-3xl font-bold text-pink-700 text-center">
+        💖 Báo cáo bán hàng
       </h2>
-      <p className="text-gray-600 mb-6">
-        Trang này cung cấp thống kê doanh thu, số lượng đơn hàng và sản phẩm bán
-        chạy.
-      </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Doanh thu tháng này</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-green-600 font-semibold text-xl">
-              {formatCurrency(reports[reports.length - 1].revenue)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Tổng đơn hàng</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-pink-600 font-semibold text-xl">
-              {reports[reports.length - 1].totalOrders}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Sản phẩm bán chạy</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-yellow-600 font-semibold text-xl">
-              {reports[reports.length - 1].bestSelling}
-            </p>
-          </CardContent>
-        </Card>
+      {/* Bộ lọc */}
+      <div className="flex flex-wrap gap-4 items-center justify-center">
+        <select
+          value={filter}
+          onChange={(e) => setFilter(e.target.value as FilterType)}
+          className="border border-pink-300 p-2 rounded-lg focus:ring-2 focus:ring-pink-400 outline-none"
+        >
+          <option value="day">Ngày</option>
+          <option value="week">Tuần</option>
+          <option value="month">Tháng</option>
+          <option value="year">Năm</option>
+          <option value="range">Khoảng thời gian</option>
+        </select>
+
+        <DatePicker
+          selected={startDate}
+          onChange={(date) => setStartDate(date)}
+          dateFormat="yyyy-MM-dd"
+          className="border border-pink-300 p-2 rounded-lg focus:ring-2 focus:ring-pink-400 outline-none"
+        />
+        {filter === "range" && (
+          <DatePicker
+            selected={endDate}
+            onChange={(date) => setEndDate(date)}
+            dateFormat="yyyy-MM-dd"
+            className="border border-pink-300 p-2 rounded-lg focus:ring-2 focus:ring-pink-400 outline-none"
+          />
+        )}
+
+        <button
+          onClick={fetchReport}
+          disabled={!startDate || (filter === "range" && !endDate)}
+          className={`px-5 py-2 rounded-lg text-white font-semibold transition ${
+            !startDate || (filter === "range" && !endDate)
+              ? "bg-pink-300 cursor-not-allowed"
+              : "bg-pink-500 hover:bg-pink-600 shadow-md"
+          }`}
+        >
+          Lấy báo cáo
+        </button>
       </div>
 
-      <div className="overflow-x-auto">
-        <Table>
-          <TableCaption>Báo cáo chi tiết theo tháng</TableCaption>
-          <TableHeader>
-            <TableRow className="bg-pink-50">
-              <TableHead>Tháng</TableHead>
-              <TableHead>Doanh thu</TableHead>
-              <TableHead>Tổng đơn hàng</TableHead>
-              <TableHead>Sản phẩm bán chạy</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {reports.map((report) => (
-              <TableRow key={report.month} className="hover:bg-pink-50">
-                <TableCell>{report.month}</TableCell>
-                <TableCell className="text-green-600 font-semibold">
-                  {formatCurrency(report.revenue)}
-                </TableCell>
-                <TableCell className="text-pink-600 font-semibold">
-                  {report.totalOrders}
-                </TableCell>
-                <TableCell className="text-yellow-600 font-semibold">
-                  {report.bestSelling}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      {/* Tổng quan */}
+      <div className="grid md:grid-cols-3 gap-4 text-center">
+        <div className="p-4 bg-white rounded-xl shadow hover:shadow-pink-200 border border-pink-100">
+          <h3 className="text-pink-600 font-semibold">Tổng doanh thu</h3>
+          <p className="text-2xl font-bold text-pink-700 mt-2">
+            {totalRevenue.toLocaleString()} ₫
+          </p>
+        </div>
+        <div className="p-4 bg-white rounded-xl shadow hover:shadow-pink-200 border border-pink-100">
+          <h3 className="text-pink-600 font-semibold">Tổng số đơn</h3>
+          <p className="text-2xl font-bold text-pink-700 mt-2">{totalOrders}</p>
+        </div>
+        <div className="p-4 bg-white rounded-xl shadow hover:shadow-pink-200 border border-pink-100">
+          <h3 className="text-pink-600 font-semibold">Sản phẩm bán chạy</h3>
+          <p className="text-xl font-bold text-pink-700 mt-2">{bestSeller}</p>
+        </div>
+      </div>
+
+      {/* Biểu đồ */}
+      <div className="p-6 bg-white rounded-xl border border-pink-100 shadow-inner">
+        <Bar
+          data={chart}
+          options={{
+            responsive: true,
+            plugins: {
+              legend: { position: "top" as const },
+              title: {
+                display: true,
+                text: "Thống kê doanh thu & số lượng",
+                color: "#d63384",
+              },
+            },
+          }}
+        />
+      </div>
+
+      {/* Bảng dữ liệu */}
+      <div className="overflow-x-auto bg-white rounded-xl border border-pink-100 shadow-md">
+        <table className="min-w-full border-collapse text-center">
+          <thead className="bg-pink-200 text-pink-900">
+            <tr>
+              <th className="border border-pink-300 px-4 py-2">Tên sản phẩm</th>
+              <th className="border border-pink-300 px-4 py-2">Danh mục</th>
+              <th className="border border-pink-300 px-4 py-2">Số lượng</th>
+              <th className="border border-pink-300 px-4 py-2">Doanh thu</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reportData.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="text-gray-500 py-4">
+                  Không có dữ liệu
+                </td>
+              </tr>
+            ) : (
+              reportData.map((item) => (
+                <tr
+                  key={item.product_id}
+                  className="hover:bg-pink-50 transition"
+                >
+                  <td className="border border-pink-100 px-4 py-2">
+                    {item.name}
+                  </td>
+                  <td className="border border-pink-100 px-4 py-2">
+                    {item.category}
+                  </td>
+                  <td className="border border-pink-100 px-4 py-2">
+                    {item.quantity}
+                  </td>
+                  <td className="border border-pink-100 px-4 py-2 text-pink-700 font-semibold">
+                    {item.revenue.toLocaleString()} ₫
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Nút in */}
+      <div className="text-center">
+        <button
+          onClick={() => window.print()}
+          className="bg-pink-500 hover:bg-pink-600 text-white px-6 py-2 rounded-lg mt-4 shadow-md transition"
+        >
+          🖨️ In báo cáo
+        </button>
       </div>
     </div>
   );

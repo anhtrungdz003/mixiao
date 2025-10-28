@@ -3,6 +3,7 @@ import { ShoppingCart, Search, Menu, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "@/assets/layouts/menu-cpn/CartContext";
 import logo from "@/assets/images/mixiao.png";
+import defaultAvatar from "@/assets/images/mixiao.png";
 
 // Định nghĩa kiểu user
 type UserType = {
@@ -19,6 +20,7 @@ const Header: React.FC = () => {
   const [lastScroll, setLastScroll] = useState(0);
   const [user, setUser] = useState<UserType | null>(null);
   const { cartCount } = useCart(); // Bỏ fetchCart vì không cần gọi thủ công
+  const API_BASE_URL = "http://localhost:3000"; // Base URL cho avatar
   console.log("🔍 Header: cartCount =", cartCount);
 
   // Load user từ localStorage khi load trang
@@ -55,6 +57,22 @@ const Header: React.FC = () => {
     };
   }, []);
 
+  // Lắng nghe sự kiện avatarUpdated từ Profile.tsx (ĐÃ THÊM)
+  useEffect(() => {
+    const handleAvatarUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<UserType>;
+      console.log(
+        "🔍 Header: Avatar updated event received, detail =",
+        customEvent.detail
+      );
+      setUser(customEvent.detail);
+    };
+    window.addEventListener("avatarUpdated", handleAvatarUpdate);
+    return () => {
+      window.removeEventListener("avatarUpdated", handleAvatarUpdate);
+    };
+  }, []);
+
   // Ẩn header khi cuộn xuống
   useEffect(() => {
     const handleScroll = () => {
@@ -65,6 +83,7 @@ const Header: React.FC = () => {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, [lastScroll]);
+
   const handleLogout = () => {
     localStorage.removeItem("user");
     localStorage.removeItem("token");
@@ -157,9 +176,11 @@ const Header: React.FC = () => {
             </Link>
           ) : (
             <div className="relative group">
-              {/* Avatar */}
+              {/* Avatar (ĐÃ SỬA: Thêm base URL) */}
               <img
-                src={user?.avatar || "https://i.pravatar.cc/40"}
+                src={
+                  user?.avatar ? `${API_BASE_URL}${user.avatar}` : defaultAvatar
+                }
                 alt={user?.username || "User"}
                 className="w-10 h-10 rounded-full border-2 border-[#ec4899] cursor-pointer"
               />
@@ -193,14 +214,12 @@ const Header: React.FC = () => {
                 )}
 
                 {/* Orders */}
-                {user?.role !== "admin" && (
-                  <Link
-                    to="/orders"
-                    className="block px-4 py-2 text-gray-700 hover:bg-pink-50 transition-colors text-base"
-                  >
-                    Đơn hàng của bạn
-                  </Link>
-                )}
+                <Link
+                  to="/orders"
+                  className="block px-4 py-2 text-gray-700 hover:bg-pink-50 transition-colors text-base"
+                >
+                  Đơn hàng của bạn
+                </Link>
 
                 {/* Logout */}
                 <button
@@ -290,10 +309,14 @@ const Header: React.FC = () => {
           <div className="flex flex-col space-y-2">
             {user && (
               <div className="flex items-center space-x-3 relative">
-                {/* Avatar trigger */}
+                {/* Avatar trigger (ĐÃ SỬA: Thêm base URL) */}
                 <img
-                  src={user.avatar || "https://i.pravatar.cc/40"}
-                  alt={user.username}
+                  src={
+                    user?.avatar
+                      ? `${API_BASE_URL}${user.avatar}`
+                      : defaultAvatar
+                  }
+                  alt={user?.username || "User"}
                   className="w-8 h-8 rounded-full border-2 border-[#ec4899] cursor-pointer"
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                 />
@@ -316,15 +339,13 @@ const Header: React.FC = () => {
                     </Link>
 
                     {/* Link orders */}
-                    {user?.role !== "admin" && (
-                      <Link
-                        to="/orders"
-                        onClick={() => setIsUserMenuOpen(false)}
-                        className="px-4 py-2 text-sm text-gray-700 hover:bg-pink-50 block"
-                      >
-                        Đơn hàng của bạn
-                      </Link>
-                    )}
+                    <Link
+                      to="/orders"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="px-4 py-2 text-sm text-gray-700 hover:bg-pink-50 block"
+                    >
+                      Đơn hàng của bạn
+                    </Link>
 
                     {/* Admin page (chỉ hiện nếu user.role === "admin") */}
                     {user?.role === "admin" && (

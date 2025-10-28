@@ -20,19 +20,42 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const navigate = useNavigate();
 
   const handleAddToCart = () => {
-    const userToken = localStorage.getItem("token"); // giả sử token lưu ở localStorage
+    const userToken = localStorage.getItem("token");
     if (!userToken) {
-      // chưa đăng nhập → chuyển trang login
       navigate("/login");
       return;
     }
 
-    // đã đăng nhập → thêm vào giỏ
+    const userData = localStorage.getItem("user");
+    if (!userData) {
+      alert("Vui lòng đăng nhập trước khi thêm vào giỏ hàng!");
+      navigate("/login");
+      return;
+    }
+
+    const user = JSON.parse(userData);
+
+    // Kiểm tra đầy đủ thông tin
+    if (
+      !user.username?.trim() ||
+      !user.full_name?.trim() ||
+      !user.email?.trim() ||
+      !user.email?.endsWith("@gmail.com") ||
+      !user.phone?.trim() ||
+      !user.address?.trim()
+    ) {
+      alert(
+        "Vui lòng cập nhật đầy đủ thông tin cá nhân (Họ tên, Email @gmail.com, SĐT, Địa chỉ) trước khi thêm vào giỏ hàng!"
+      );
+      navigate("/profile"); // điều hướng đến trang Profile
+      return;
+    }
+
     addToCart({
       id,
       name,
       price,
-      image: image.startsWith("/") ? image : `/images-menu/${image}`,
+      image,
       quantity,
     });
 
@@ -41,13 +64,11 @@ const ProductCard: React.FC<ProductCardProps> = ({
     setQuantity(1);
   };
 
-  const imgSrc = image.startsWith("/") ? image : `/images-menu/${image}`;
-
   return (
     <div className="bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-lg transition flex flex-col">
       <div className="relative w-full h-56 overflow-hidden">
         <img
-          src={imgSrc}
+          src={image}
           alt={name}
           className="object-cover w-full h-full transition-transform duration-300 hover:scale-105"
         />
@@ -55,7 +76,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
       <div className="p-4 flex flex-col flex-grow">
         <h3 className="text-lg font-semibold text-gray-800">{name}</h3>
         <p className="text-pink-500 font-bold text-lg mb-3">
-          {price.toLocaleString()}đ
+          {price.toLocaleString("vi-VN")} đ
         </p>
 
         <div className="flex items-center gap-2 mb-3">

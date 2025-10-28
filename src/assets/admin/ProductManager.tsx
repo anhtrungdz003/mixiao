@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import type { ChangeEvent } from "react";
-
 import {
   Table,
   TableBody,
@@ -21,7 +20,6 @@ import { Button } from "@/components/button";
 import { Input } from "@/components/input";
 import { Edit, Trash2, Plus, Eye } from "lucide-react";
 
-// --- Kiểu dữ liệu sản phẩm ---
 interface Product {
   id: number;
   name: string;
@@ -32,12 +30,13 @@ interface Product {
 }
 
 const API_URL = "http://localhost:3000/api/products";
+const BACKEND_URL = "http://localhost:3000"; // URL backend để prepend cho ảnh từ uploads
 
 const ProductManager: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
-  const [formData, setFormData] = useState<Product>({
+  const [formData, setFormData] = useState<Partial<Product>>({
     id: 0,
     name: "",
     category: "",
@@ -45,16 +44,43 @@ const ProductManager: React.FC = () => {
     stock: 0,
     image: "",
   });
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailData, setDetailData] = useState<Product | null>(null);
 
   const token = localStorage.getItem("token");
 
+  // Hàm xử lý URL ảnh: Prepend URL đúng dựa trên nguồn
+  const getImageSrc = (image: string) => {
+    if (!image) return "";
+
+    // Nếu đường dẫn từ backend uploads
+    if (image.startsWith("/uploads")) {
+      return `${BACKEND_URL}${image}`;
+    }
+
+    // Nếu là tên file hoặc từ images-menu cũ
+    if (!image.includes("/")) {
+      return `/images-menu/${image}`; // frontend serve trực tiếp
+    }
+
+    // Nếu là URL đầy đủ
+    if (image.startsWith("http")) {
+      return image;
+    }
+
+    // Fallback
+    return image;
+  };
+
   // --- Fetch danh sách sản phẩm ---
   const fetchProducts = async () => {
     try {
-      const res = await fetch(API_URL);
+      const res = await fetch(API_URL, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
       if (data.data) setProducts(data.data);
       else setProducts(data);
@@ -77,12 +103,18 @@ const ProductManager: React.FC = () => {
       stock: 0,
       image: "",
     });
+    setSelectedImage(null);
+    setImagePreview("");
     setIsDialogOpen(true);
   };
 
   const handleEdit = (index: number) => {
     setEditIndex(index);
-    setFormData(products[index]);
+    const product = products[index];
+    setFormData(product);
+    setSelectedImage(null);
+    // Set imagePreview với URL đầy đủ
+    setImagePreview(getImageSrc(product.image));
     setIsDialogOpen(true);
   };
 
@@ -97,45 +129,80 @@ const ProductManager: React.FC = () => {
     setFormData({ ...formData, [key]: value });
   };
 
+  const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        alert("Chỉ cho phép upload file ảnh!");
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        alert("Kích thước file không được vượt quá 5MB!");
+        return;
+      }
+      setSelectedImage(file);
+      setImagePreview(URL.createObjectURL(file)); // Preview file local
+    }
+  };
+
   const handleSave = async () => {
-    console.log("handleSave called", formData);
-    if (!formData.name || formData.price <= 0) {
-      alert("Vui lòng nhập tên và giá hợp lệ!");
+    // Kiểm tra đầy đủ
+    if (
+      !formData.name?.trim() ||
+      !formData.category?.trim() ||
+      !formData.price ||
+      formData.price <= 0 ||
+      !formData.stock ||
+      selectedImage === null
+    ) {
+      alert("Vui lòng điền đầy đủ thông tin sản phẩm và chọn ảnh!");
       return;
     }
 
     try {
-      console.log("Sending fetch...");
-      if (editIndex === null) {
-        // Thêm mới
-        const res = await fetch(API_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(formData),
-        });
-        const data = await res.json();
-        setProducts([...products, { ...formData, id: data.insertId || 0 }]);
-      } else {
-        // Cập nhật
-        const id = products[editIndex].id;
-        await fetch(`${API_URL}/${id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(formData),
-        });
-        const updated = [...products];
-        updated[editIndex] = formData;
-        setProducts(updated);
+      const payload = new FormData();
+      payload.append("name", formData.name);
+      payload.append("category", formData.category);
+      payload.append("price", (formData.price || 0).toString());
+      payload.append("stock", (formData.stock || 0).toString());
+      if (selectedImage) payload.append("image", selectedImage);
+
+      const url =
+        editIndex === null ? API_URL : `${API_URL}/${products[editIndex].id}`;
+      const method = editIndex === null ? "POST" : "PUT";
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: payload,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Lỗi khi lưu sản phẩm");
       }
+
+      const data = await res.json();
+
+      if (editIndex === null) {
+        setProducts([...products, data.data]);
+      } else {
+        const updatedIndex = products.findIndex((p) => p.id === data.data.id);
+        if (updatedIndex !== -1) {
+          const updatedProducts = [...products];
+          updatedProducts[updatedIndex] = data.data;
+          setProducts(updatedProducts);
+        }
+      }
+
       setIsDialogOpen(false);
+      setSelectedImage(null);
+      setImagePreview("");
     } catch (err) {
       console.error("Lỗi khi lưu:", err);
+      alert(err instanceof Error ? err.message : "Lỗi khi lưu sản phẩm!");
     }
   };
 
@@ -163,7 +230,7 @@ const ProductManager: React.FC = () => {
 
   return (
     <div className="p-6 bg-white rounded-2xl shadow-md border border-pink-100">
-      <div className="flex justify-between items-center mb-4">
+      <div className="sticky top-0 z-10 bg-white p-6 border-b border-pink-100 flex justify-between items-center">
         <h2 className="text-2xl font-semibold text-pink-500">
           Quản lý sản phẩm
         </h2>
@@ -199,11 +266,7 @@ const ProductManager: React.FC = () => {
                 <TableCell>
                   {p.image && (
                     <img
-                      src={
-                        p.image.startsWith("http")
-                          ? p.image
-                          : `/images-menu/${p.image}`
-                      }
+                      src={getImageSrc(p.image)} // Sử dụng hàm getImageSrc
                       alt={p.name}
                       className="w-12 h-12 rounded-md object-cover"
                     />
@@ -246,23 +309,71 @@ const ProductManager: React.FC = () => {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            {(Object.keys(formData) as (keyof Product)[])
-              .filter((key) => key !== "id")
-              .map((key) => (
-                <div key={key}>
-                  <label className="text-sm text-gray-700 capitalize">
-                    {key}
-                  </label>
-                  <Input
-                    type={
-                      key === "price" || key === "stock" ? "number" : "text"
-                    }
-                    value={formData[key] ?? ""}
-                    onChange={(e) => handleChange(e, key)}
-                  />
-                </div>
-              ))}
+            <div>
+              <label className="text-sm text-gray-700">Tên sản phẩm</label>
+              <Input
+                type="text"
+                value={formData.name || ""}
+                onChange={(e) => handleChange(e, "name")}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-700">Loại</label>
+              <select
+                value={formData.category || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, category: e.target.value })
+                }
+                className="w-full border rounded-md p-2"
+              >
+                <option value="">Chọn loại</option>
+                <option value="Trà sữa">Trà sữa</option>
+                <option value="Cà phê">Cà phê</option>
+                <option value="Trà trái cây">Trà trái cây</option>
+                <option value="Sinh tố">Sinh tố</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm text-gray-700">Giá</label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  value={formData.price || 0}
+                  onChange={(e) => handleChange(e, "price")}
+                  className="pr-16" // padding để tránh chữ bị che
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-pink-500 font-semibold">
+                  đ
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-700">Tồn kho</label>
+              <Input
+                type="number"
+                value={formData.stock || 0}
+                onChange={(e) => handleChange(e, "stock")}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-700">Ảnh sản phẩm</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="w-full border p-2 rounded-md"
+              />
+              {imagePreview && (
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="w-20 h-20 rounded-md mt-2 object-cover"
+                />
+              )}
+            </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Hủy
@@ -292,9 +403,17 @@ const ProductManager: React.FC = () => {
                       {key}
                     </TableCell>
                     <TableCell>
-                      {key === "price"
-                        ? formatPrice(detailData[key])
-                        : detailData[key]}
+                      {key === "price" ? (
+                        formatPrice(detailData[key])
+                      ) : key === "image" && detailData[key] ? (
+                        <img
+                          src={getImageSrc(detailData[key])} // Sử dụng hàm getImageSrc
+                          alt={detailData.name}
+                          className="w-20 h-20 object-cover rounded-md"
+                        />
+                      ) : (
+                        detailData[key]
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

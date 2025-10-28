@@ -50,6 +50,14 @@ const OrderManager: React.FC = () => {
 
   const token = localStorage.getItem("token");
 
+  const getImageSrc = (image?: string) => {
+    if (!image) return "/images-menu/default.jpg"; // fallback ảnh mặc định
+    if (image.startsWith("/uploads")) return `http://localhost:3000${image}`;
+    if (!image.includes("/")) return `/images-menu/${image}`;
+    if (image.startsWith("http")) return image;
+    return image;
+  };
+
   // 🔹 Lấy danh sách đơn hàng
   const fetchOrders = useCallback(async () => {
     try {
@@ -64,6 +72,8 @@ const OrderManager: React.FC = () => {
 
   useEffect(() => {
     fetchOrders();
+    const interval = setInterval(fetchOrders, 60 * 1000); // load lại mỗi phút
+    return () => clearInterval(interval); // cleanup khi component unmount
   }, [fetchOrders]);
 
   // Xóa đơn hàng
@@ -73,7 +83,7 @@ const OrderManager: React.FC = () => {
       await axios.delete(`${API_URL}/orders/${orderId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      fetchOrders(); // tải lại danh sách
+      await fetchOrders(); // tải lại danh sách
     } catch (err) {
       console.error(err);
       alert("Xóa đơn hàng thất bại");
@@ -162,6 +172,7 @@ const OrderManager: React.FC = () => {
                     : o.total.toLocaleString()}
                   ₫
                 </TableCell>
+
                 <TableCell className={getStatusColor(o.status)}>
                   {o.status}
                 </TableCell>
@@ -197,10 +208,10 @@ const OrderManager: React.FC = () => {
             <div
               id="invoice-content"
               ref={invoiceRef}
-              className="bg-white p-4 rounded-lg"
+              className="bg-white p-4 rounded-lg max-h-[70vh] overflow-y-auto"
             >
               {/* Thông tin khách hàng */}
-              <div className="bg-pink-50 p-4 rounded-lg border border-pink-200">
+              <div className="bg-pink-50 p-4 rounded-lg border border-pink-200 mb-4">
                 <p>
                   <strong>Khách hàng:</strong> {detailOrder.user_full_name}
                 </p>
@@ -242,11 +253,7 @@ const OrderManager: React.FC = () => {
                       <TableRow key={item.id}>
                         <TableCell>
                           <img
-                            src={
-                              item.image.startsWith("http")
-                                ? item.image
-                                : `/images-menu/${item.image}`
-                            }
+                            src={getImageSrc(item.image)}
                             alt={item.product_name}
                             className="w-12 h-12 rounded-md object-cover"
                           />

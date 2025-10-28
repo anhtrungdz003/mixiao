@@ -22,13 +22,24 @@ const ProductGrid: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const productsPerPage = 8;
 
+  const getImageSrc = (image: string) => {
+    if (!image) return "";
+    if (image.startsWith("/uploads")) return `http://localhost:3000${image}`;
+    if (!image.includes("/")) return `/images-menu/${image}`;
+    return image;
+  };
+
   // --- Lấy dữ liệu ---
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         const res = await axios.get("http://localhost:3000/api/products");
-        setProducts(res.data.data);
-        setFilteredProducts(res.data.data);
+        const dataWithImages = res.data.data.map((p: Product) => ({
+          ...p,
+          image: getImageSrc(p.image),
+        }));
+        setProducts(dataWithImages);
+        setFilteredProducts(dataWithImages);
       } catch (err) {
         console.error(err);
       } finally {
